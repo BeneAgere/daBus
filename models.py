@@ -2,6 +2,9 @@ from sklearn.cross_validation import KFold, train_test_split
 from sklearn import cross_validation
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge, Lasso, RidgeCV, LassoCV, LinearRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.grid_search import GridSearchCV
+from sklearn.metrics import make_scorer
 
 import pandas as pd
 import numpy as np
@@ -10,7 +13,10 @@ pd.set_option('display.max_columns', 75)
 # metrics
 def rmsle(theta, thetahat):
     ''' Compute Root-mean-squared-log-error '''
-    return np.sqrt(np.mean(np.log(theta+1) - np.log(thetahat+1)) ** 2)
+    return np.sqrt(np.mean(np.log(np.array(theta)+1) - np.log(np.array(thetahat)+1)) ** 2)
+
+# make custom score function
+custom_score = make_scorer(rmsle, greater_is_better=True)
 
 # base model
 def eval_base_model(estimator, xtrain, xtest, ytrain, ytest):
@@ -54,6 +60,27 @@ def kfolds_cv(estimator, X, y):
             "Err Train": np.mean(train_err),
             "Err Test": np.mean(test_err)}
 
+# grid search
+def grid_search_cv():
+    lg_base_params = {'fit_intercept':[True,False], 'normalize':[True,False], 'copy_X':[True, False]}
+    ridge_params   = {'alpha':[0.001, 0.01,0.1,0.2,0.3,0.4,0.5], 'normalize':[True,False]}
+    lasso_params   = {'alpha':[0.001, 0.01,0.1,0.2,0.3,0.4,0.5], 'normalize':[True,False]}
+
+    estimators = [(LinearRegression, lg_base_params),
+                  (Ridge, ridge_params),
+                  (Lasso, lasso_params)]
+
+    for est, params in estimators:
+        gridsearch = GridSearchCV(est(),
+                                  params,
+                                  n_jobs=-1,
+                                  verbose=True,
+                                  scoring=custom_score)
+        gridsearch.fit(xtrain, ytrain)
+        print 'estimator name:', gridsearch.best_estimator_
+        print "best score:", gridsearch.best_score_
+        print "best parameters:", gridsearch.best_params_
+        best_model = gridsearch.best_estimator_
 
 
 if __name__ == "__main__":
@@ -66,7 +93,15 @@ if __name__ == "__main__":
     target   =  df_sub['SalePrice']
     xtrain, xtest, ytrain, ytest = train_test_split(features, target, test_size=0.3)
 
-    models = [LinearRegression(), Ridge(alpha=0.2), Lasso(alpha=0.2)]
+    # perform grid search
+    grid_search_cv()
+
+    models = [LinearRegression(normalize=True),
+          Ridge(alpha=0.2, normalize=True, solver='auto'),
+          Lasso(alpha=0.2, normalize=True),
+          RandomForestRegressor(n_jobs=-1),
+          GradientBoostingRegressor()]
+
     for model in models:
         print eval_base_model(model, xtrain, xtest, ytrain, ytest)
         print kfolds_cv(model, features.values, target.values)
