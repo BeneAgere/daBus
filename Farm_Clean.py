@@ -96,4 +96,5 @@ datasource = 121
 auctioneerID = Nan
 ProductSize = Nan
 State = unspecified
+
 '''
